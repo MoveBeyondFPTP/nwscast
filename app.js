@@ -100,6 +100,16 @@ const COAG = [
   { id: "ftc01", name: "CSU AERC (Fort Collins)", lat: 40.5947, lon: -105.1370, elev: 5120 / 3.281 },
   { id: "fcc01", name: "Christman Field (Fort Collins)", lat: 40.5917, lon: -105.1418, elev: 5148 / 3.281 }
 ];
+// CSU station readings, copied every 15 minutes by this site's GitHub relay (.github/workflows/station-relay.yml)
+const RELAY_URL = "https://raw.githubusercontent.com/MoveBeyondFPTP/nwscast/data/coagmet.json";
+let relayP = null, relayAt = 0;
+function coagRelay() {
+  if (!relayP || Date.now() - relayAt > 5 * 60e3) {
+    relayAt = Date.now();
+    relayP = getJSON(RELAY_URL).catch(() => null);
+  }
+  return relayP;
+}
 const fresh = t => !isNaN(t) && Date.now() - t < OBS_MAX_AGE && t < Date.now() + 10 * 60e3;
 function rankStations(pts, lat, lon, elevM) {
   const all = (pts.stations || []).filter(s => s.lat != null).map(s => ({ ...s, kind: "nws" }))
@@ -112,7 +122,9 @@ async function pickObs(pts, lat, lon, elevM) {
   for (const s of rankStations(pts, lat, lon, elevM).slice(0, 5)) {
     try {
       if (s.kind === "coag") {
-        const L = parseCoag(await getDirect("coagmet", `https://coagmet.colostate.edu/data/latest/${s.id}.json`));
+        const relay = await coagRelay();
+        const raw = relay && relay.stations && relay.stations[s.id];
+        const L = parseCoag(raw || await getDirect("coagmet", `https://coagmet.colostate.edu/data/latest/${s.id}.json`));
         if (fresh(L.time)) return { kind: "coag", name: s.name, d: s.d, ...L };
       } else {
         const p = (await getJSON(`${API}/stations/${s.id}/observations/latest`)).properties;

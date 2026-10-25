@@ -1,0 +1,59 @@
+# Fetches the latest readings from CSU's CoAgMET weather stations in Fort Collins every
+# 15 minutes and publishes them to the "data" branch, where the app can read them.
+# (CoAgMET doesn't let phone apps read its data directly.)
+name: Station relay
+
+on:
+  schedule:
+    - cron: "4,19,34,49 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/station-relay.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: station-relay
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch station readings
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.request
+          stations = ["fcl01", "ftc01", "fcc01"]
+          out = {"updated": int(time.time()), "stations": {}}
+          for sid in stations:
+              url = f"https://coagmet.colostate.edu/data/latest/{sid}.json"
+              for attempt in range(3):
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": "NWScast station relay (github.com/MoveBeyondFPTP/nwscast)"})
+                      with urllib.request.urlopen(req, timeout=20) as r:
+                          out["stations"][sid] = json.load(r)
+                      break
+                  except Exception as e:
+                      print(f"{sid} attempt {attempt + 1}: {e}")
+                      time.sleep(5)
+          print("got", list(out["stations"]))
+          if not out["stations"]:
+              raise SystemExit("No stations answered; keeping the previous data.")
+          import os
+          os.makedirs("site", exist_ok=True)
+          with open("site/coagmet.json", "w") as f:
+              json.dump(out, f, separators=(",", ":"))
+          PY
+      - name: Publish to the data branch
+        run: |
+          cd site
+          git init -q -b data
+          git config user.name "NWScast relay"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coagmet.json
+          git commit -q -m "Station readings $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data

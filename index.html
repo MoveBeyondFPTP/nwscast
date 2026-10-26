@@ -161,26 +161,35 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .alert .body { padding: 0 14px 14px; font-size: 13.5px; white-space: pre-line; }
 .alert .body h4 { margin: 10px 0 2px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
-/* 7-day rows */
-.days { overflow: hidden; }
-.day { border-top: 1px solid var(--line); }
-.day:first-child { border-top: 0; }
-.day > button {
-  all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
-  display: grid; grid-template-columns: 76px 40px 34px 1fr; align-items: center; gap: 8px; padding: 10px 14px;
+/* 7-day columns: day icon + rain chance on top, high/low bar on a shared scale, night icon + rain chance below */
+.wk { overflow: hidden; }
+.wk-cols { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); }
+.wk-c {
+  all: unset; box-sizing: border-box; cursor: pointer; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; padding-block: 12px;
+  border-left: 1px solid var(--line); -webkit-tap-highlight-color: transparent;
 }
-.day-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.day-icon { width: 40px; height: 40px; }
-.pop { font-size: 12px; font-weight: 600; color: var(--rain); text-align: center; }
-.range { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-.range .lo { color: var(--muted); text-align: right; }
-.range .hi { font-weight: 600; }
-.track { position: relative; height: 6px; border-radius: 3px; background: var(--surface-2); }
-.track i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-.day-detail { padding: 0 14px 14px; display: none; flex-direction: column; gap: 10px; }
-.day.open .day-detail { display: flex; }
-.day-detail p { margin: 0; font-size: 14px; }
-.day-detail b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.wk-c:first-child { border-left: 0; }
+.wk-c[aria-pressed="true"] { background: var(--surface-2); }
+.wk-c:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 0; }
+.wk-dn { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
+.wk-dd { font-size: 16px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.wk-c.today .wk-dn, .wk-c.today .wk-dd { color: var(--accent); }
+.wk-ic { width: 38px; height: 38px; max-width: 92%; margin-top: 8px; }
+.wk-pp { font-size: 12px; font-weight: 600; color: var(--rain); height: 17px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.wk-pp.dry { color: var(--muted); opacity: .55; }
+.wk-track { position: relative; width: 100%; height: 230px; margin-block: 6px; }
+.wk-bar { position: absolute; left: 50%; width: 12px; margin-left: -6px; border-radius: 7px; }
+.wk-hi, .wk-lo { position: absolute; left: 0; right: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.wk-hi { font-weight: 700; font-size: 17px; }
+.wk-lo { font-size: 15px; color: var(--muted); }
+.wk-empty { height: 55px; }
+.wk.dense .wk-ic { width: 32px; height: 32px; }
+.wk.dense .wk-hi { font-size: 15px; }
+.wk.dense .wk-lo { font-size: 13.5px; }
+.wk-detail { padding: 12px 14px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.wk-detail p { margin: 0; max-width: 65ch; }
+.wk-detail b { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 1px; }
 
 /* Hourly */
 .strip-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 14px 0 12px; }
@@ -380,6 +389,6 @@ details[open] > summary .chev { transform: rotate(90deg); }
 <div class="scrim" id="scrim" hidden></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden></div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

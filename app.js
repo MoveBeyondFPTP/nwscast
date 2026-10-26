@@ -608,32 +608,53 @@ function renderWeek() {
   html += alertList(d.alerts);
   html += statusLine("forecast", "7-day forecast");
   if (periods.length) {
-    const days = groupDays(periods);
-    const all = periods.map(p => p.temperature);
+    const days = groupDays(periods).slice(0, 8);
+    const all = days.flatMap(x => [x.day, x.night]).filter(Boolean).map(p => p.temperature);
     const mn = Math.min(...all), mx = Math.max(...all), span = Math.max(1, mx - mn);
-    html += `<h2 class="h2">7-Day Forecast · ${esc(placeName())}</h2><div class="card days">${days.map((dy, i) => {
-      const main = dy.day || dy.night;
+    const H = 230, pad = 26, y = t => pad + (1 - (t - mn) / span) * (H - 2 * pad);
+    if (wkSel >= days.length) wkSel = 0;
+    const popOf = p => p && p.probabilityOfPrecipitation && p.probabilityOfPrecipitation.value || 0;
+    const half = (p, isDay) => p
+      ? `<span class="wk-ic">${iconSVG(p.icon, p.shortForecast, isDay)}</span><span class="wk-pp ${popOf(p) < 10 ? "dry" : ""}">${popOf(p)}%</span>`
+      : `<span class="wk-empty"></span>`;
+    const cols = days.map((dy, i) => {
+      const main = dy.day || dy.night, when = new Date(main.startTime);
       const hi = dy.day ? dy.day.temperature : null, lo = dy.night ? dy.night.temperature : null;
-      const a = lo ?? hi, b = hi ?? lo;
-      const pop = Math.max(0, ...[dy.day, dy.night].filter(Boolean).map(p => p.probabilityOfPrecipitation && p.probabilityOfPrecipitation.value || 0));
-      const name = i === 0 ? (dy.day ? "Today" : "Tonight") : fShortDay.format(new Date(main.startTime));
-      return `<div class="day"><button aria-expanded="false">
-          <span class="day-name">${name}</span>
-          <span class="day-icon">${iconSVG(main.icon, main.shortForecast, main.isDaytime)}</span>
-          <span class="pop num">${pop >= 10 ? pop + "%" : ""}</span>
-          <span class="range"><span class="lo">${lo != null ? lo + "°" : ""}</span>
-            <span class="track"><i style="left:${(a - mn) / span * 100}%;width:${Math.max(4, (b - a) / span * 100)}%;background:linear-gradient(90deg,${tempColor(a)},${tempColor(b)})"></i></span>
-            <span class="hi">${hi != null ? hi + "°" : ""}</span></span>
-        </button>
-        <div class="day-detail">${[dy.day, dy.night].filter(Boolean).map(p => `<p><b>${esc(p.name)}</b>${esc(p.detailedForecast)}</p>`).join("")}</div></div>`;
-    }).join("")}</div>
-    <p class="note">Tap a day for the full forecast text. Forecast issued ${esc(fLong.format(new Date(fc.updateTime || fc.generatedAt)))}.</p>`;
+      const top = y(hi ?? lo), bot = y(lo ?? hi);
+      const barH = Math.max(12, bot - top), barTop = hi != null && lo != null ? top : top - 6;
+      const name = i === 0 ? (dy.day ? "Today" : "Tonight") : fShortDay.format(when);
+      const label = `${fWeekday.format(when)}: ${dy.day ? dy.day.shortForecast + ", high " + hi + "°" : ""}${dy.day && dy.night ? "; " : ""}${dy.night ? "night " + dy.night.shortForecast + ", low " + lo + "°" : ""}`;
+      return `<button class="wk-c ${i === 0 ? "today" : ""}" data-wk="${i}" aria-pressed="${i === wkSel}" aria-label="${esc(label)}">
+        <span class="wk-dn">${name}</span><span class="wk-dd">${esc(fmtDayNum(when))}</span>
+        ${half(dy.day, true)}
+        <span class="wk-track">
+          ${hi != null ? `<span class="wk-hi" style="top:${barTop - 24}px">${hi}°</span>` : ""}
+          <span class="wk-bar" style="top:${barTop}px;height:${barH}px;background:linear-gradient(${tempColor(hi ?? lo)},${tempColor(lo ?? hi)})"></span>
+          ${lo != null ? `<span class="wk-lo" style="top:${barTop + barH + 4}px">${lo}°</span>` : ""}
+        </span>
+        ${half(dy.night, false)}
+      </button>`;
+    }).join("");
+    html += `<h2 class="h2">7-Day Forecast · ${esc(placeName())}</h2>
+      <div class="card wk ${days.length > 7 ? "dense" : ""}" style="--n:${days.length}">
+        <div class="wk-cols">${cols}</div>
+        <div class="wk-detail" id="wk-detail">${wkDetail(days[wkSel])}</div>
+      </div>
+      <p class="note">Tap a day for the full forecast. Forecast issued ${esc(fLong.format(new Date(fc.updateTime || fc.generatedAt)))}.</p>`;
+    el._days = days;
   }
   el.innerHTML = html;
   el.querySelectorAll("[data-open-sheet]").forEach(b => b.addEventListener("click", openSheet));
-  el.querySelectorAll(".day > button").forEach(b => b.addEventListener("click", () => {
-    const dd = b.parentElement; dd.classList.toggle("open"); b.setAttribute("aria-expanded", dd.classList.contains("open"));
+  el.querySelectorAll("[data-wk]").forEach(b => b.addEventListener("click", () => {
+    wkSel = +b.dataset.wk;
+    el.querySelectorAll("[data-wk]").forEach(x => x.setAttribute("aria-pressed", x === b));
+    $("#wk-detail").innerHTML = wkDetail(el._days[wkSel]);
   }));
+}
+let wkSel = 0;
+const fmtDayNum = d => new Intl.DateTimeFormat("en-US", { timeZone: TZ, day: "numeric" }).format(d);
+function wkDetail(dy) {
+  return [dy.day, dy.night].filter(Boolean).map(p => `<p><b>${esc(p.name)}</b>${esc(p.detailedForecast)}</p>`).join("");
 }
 
 /* ---------- hourly tab ---------- */
@@ -997,7 +1018,7 @@ function showTab(tab) {
 function switchTo(id) {
   if (id === activeId && !S.errors.points) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
   activeId = id; store.set("nwsb.active", id);
-  seasonOverride = null; radarSite = null; geoError = "";
+  seasonOverride = null; radarSite = null; geoError = ""; wkSel = 0;
   restore(); renderChips(); renderAll(); window.scrollTo(0, 0);
   loadAll();
 }

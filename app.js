@@ -158,6 +158,25 @@ function parseCoag(j) {
   return out;
 }
 
+/* ---------- sun position ----------
+   The NWS hourly forecast treats 6 AM to 6 PM as "daytime" everywhere, so icons use the real
+   sunrise and sunset instead: the sun counts as up when its center is above -0.833° (standard
+   refraction-corrected horizon). Accurate to about a minute for weather icon purposes. */
+function solarElevation(ms, lat, lon) {
+  const r = Math.PI / 180, d = ms / 864e5 + 2440587.5 - 2451545.0;
+  const g = (357.529 + 0.98560028 * d) * r, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * r, e = (23.439 - 0.00000036 * d) * r;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24) * 15 * r;
+  const ha = gmst + lon * r - ra;
+  return Math.asin(Math.sin(lat * r) * Math.sin(dec) + Math.cos(lat * r) * Math.cos(dec) * Math.cos(ha)) / r;
+}
+function sunUp(ms) {
+  const l = activeLoc();
+  if (l.lat == null || l.lon == null) return true;
+  return solarElevation(ms, +l.lat, +l.lon) > -0.833;
+}
+
 /* ---------- weather icons ---------- */
 const CLOUD = "M16 50h32a11 11 0 0 0 1.5-21.9A15 15 0 0 0 20.6 25 12.6 12.6 0 0 0 16 50z";
 function sun(cx, cy, r) {
@@ -579,7 +598,7 @@ function renderWeek() {
     // CSU stations don't report sky conditions, so the sky comes from this hour's forecast
     const desc = (o && o.desc) || (h0 && h0.shortForecast) || "";
     const icon = (o && o.icon) || (h0 && h0.icon);
-    const isDay = h0 ? h0.isDaytime : true;
+    const isDay = sunUp(Date.now());
     const wind = o && o.windSpeed != null ? Math.round(o.windSpeed) : null;
     const dir = o && o.windDir != null ? compass(o.windDir) : "";
     const gust = o && o.gustSpeed != null && o.gustSpeed > (o.windSpeed || 0) + 5 ? Math.round(o.gustSpeed) : null;
@@ -685,7 +704,7 @@ function renderHourly() {
         return `<div class="col">
           <span class="daylabel">${newDay ? esc(fShortDay.format(new Date(p.startTime))) : ""}</span>
           <span class="t ${i === 0 ? "now" : ""}">${i === 0 ? "Now" : hourLabel(p.startTime)}</span>
-          <span class="ic">${iconSVG(p.icon, p.shortForecast, p.isDaytime)}</span>
+          <span class="ic">${iconSVG(p.icon, p.shortForecast, sunUp(Date.parse(p.startTime) + 30 * 60e3))}</span>
           <span class="sp"></span>
           <span class="tp num">${p.temperature}°</span>
           <span class="pp num">${pop ? pop + "%" : ""}</span>
@@ -707,7 +726,7 @@ function renderHourly() {
         const pop = p.probabilityOfPrecipitation && p.probabilityOfPrecipitation.value || 0;
         return `<div class="hrow">
           <span class="ti num">${esc(fHour.format(new Date(p.startTime)))}</span>
-          <span class="ic">${iconSVG(p.icon, p.shortForecast, p.isDaytime)}</span>
+          <span class="ic">${iconSVG(p.icon, p.shortForecast, sunUp(Date.parse(p.startTime) + 30 * 60e3))}</span>
           <span class="sf">${esc(p.shortForecast)}<small>${esc(p.windDirection)} ${esc(p.windSpeed)}${p.dewpoint && p.dewpoint.value != null ? ` · Dew pt ${Math.round(cToF(p.dewpoint.value))}°` : ""}</small></span>
           <span class="pp num">${pop ? pop + "%" : ""}</span>
           <span class="tp num">${p.temperature}°</span>
